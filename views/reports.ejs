@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+<head>
+    <%- include('_layouts/head') %>
+    <title>Reports & Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="/app-assets/vendors/data-tables/css/jquery.dataTables.min.css">
+<link rel="stylesheet" type="text/css" href="/app-assets/vendors/data-tables/extensions/responsive/css/responsive.dataTables.min.css">
+<link rel="stylesheet" type="text/css" href="/app-assets/vendors/data-tables/css/select.dataTables.min.css">
+<link rel="stylesheet" type="text/css" href="/app-assets/css/pages/data-tables.css">
+    <style>
+        .stat-card {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-card h5 {
+            font-size: 14px;
+            color: #666;
+            margin: 0 0 10px 0;
+        }
+        .stat-card h3 {
+            font-size: 28px;
+            margin: 0;
+            font-weight: bold;
+        }
+        .stat-card.revenue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .stat-card.commission { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .stat-card.transactions { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+        .stat-card.payout { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+        .stat-card.advertisement { background: linear-gradient(135deg, #ffa43cd0 0%, #ffd82c 100%); color: white; }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .data-table {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        table tr td, th {
+    text-align: center;
+}
+    </style>
+</head>
+
+<body class="vertical-layout page-header-light vertical-menu-collapsible vertical-dark-menu preload-transitions 2-columns"
+      data-open="click" data-menu="vertical-dark-menu" data-col="2-columns">
+
+    <%- include('_layouts/sidenavbar') %>
+
+    <div id="main">
+        <div class="row">
+            <div class="pt-1 pb-0" id="breadcrumbs-wrapper">
+                <div class="container">
+                    <div class="row">
+                        <%- include('messages', { messages: messages }) %>
+                        <div class="col s12 m6 l6">
+                            <h6 class="breadcrumbs-title"><span>Reports & Analytics</span></h6>
+                        </div>
+                        <div class="col s12 m6 l6 right-align-md" style="margin-top: -10px;">
+                            <ol class="breadcrumbs mb-0">
+                                <li class="breadcrumb-item"><a href="/admin">Dashboard</a></li>
+                                <li class="breadcrumb-item active">Reports</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col s12">
+                <div class="container">
+
+                    <!-- Filter Section -->
+                    <div class="filter-section">
+                        <form action="/admin/reports" method="GET">
+                            <div class="row">
+                                <div class="col s12 m3">
+                                    <label>Quick Filter</label>
+                                    <select name="period" class="browser-default" onchange="this.form.submit()">
+                                        <option value="all" <%= period === 'all' ? 'selected' : '' %>>All Time</option>
+                                        <option value="today" <%= period === 'today' ? 'selected' : '' %>>Today</option>
+                                        <option value="week" <%= period === 'week' ? 'selected' : '' %>>Last 7 Days</option>
+                                        <option value="month" <%= period === 'month' ? 'selected' : '' %>>Last 30 Days</option>
+                                        <!-- <option value="year" <%= period === 'year' ? 'selected' : '' %>>Last Year</option> -->
+                                    </select>
+                                </div>
+                                    <a href="/admin/reports/transactions" class="btn-small waves-effect blue">
+                                      <i class="material-icons left">list</i>View All Transactions
+                                    </a>
+                            </div>
+                        </form>
+                        <div class="row">
+                            <div class="col s12 right-align">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="row">
+                        <div class="col s12 m6 l3">
+                            <div class="stat-card revenue">
+                                <h5>Total Revenue</h5>
+                                <h3>$<%= stats.totalRevenue.toFixed(2) %></h3>
+                                <p><%= stats.totalTransactions %> transactions</p>
+                            </div>
+                        </div>
+                        <div class="col s12 m6 l3">
+                            <div class="stat-card commission">
+                                <h5>Admin Commission</h5>
+                                <h3>$<%= stats.totalCommission.toFixed(2) %></h3>
+                                <p><%= ((stats.totalCommission / stats.totalRevenue) * 100 || 0).toFixed(1) %>% of revenue</p>
+                            </div>
+                        </div>
+                        <div class="col s12 m6 l3">
+                            <div class="stat-card payout">
+                                <h5>Owner Payouts</h5>
+                                <h3>$<%= stats.totalOwnerPayout.toFixed(2) %></h3>
+                                <p><%= ((stats.totalOwnerPayout / stats.totalRevenue) * 100 || 0).toFixed(1) %>% of revenue</p>
+                            </div>
+                        </div>
+                        <div class="col s12 m6 l3">
+                            <div class="stat-card transactions">
+                                <h5>Transactions</h5>
+                                <h3><%= stats.totalTransactions %></h3>
+                                <p>$<%= (stats.totalRevenue / stats.totalTransactions || 0).toFixed(2) %> avg</p>
+                            </div>
+                        </div>
+                         <div class="col s12 m6 l3">
+                            <div class="stat-card advertisement">
+                                <h5>Advertisement Revenue</h5>
+                                <h3>$<%= (totalAdRevenueFiltered || 0).toFixed(2) %></h3>
+                                <p>Paid ads (this period)</p>
+                            </div>
+                        </div>
+ 
+                    </div>
+
+                    <!-- Refund Stats -->
+                    <% if (refunds.refundCount > 0) { %>
+                    <div class="row">
+                        <div class="col s12">
+                            <div class="card orange lighten-5">
+                                <div class="card-content">
+                                    <h6><i class="material-icons left">warning</i>Refund Statistics</h6>
+                                    <p>Total Refunded: <strong>$<%= refunds.totalRefunded.toFixed(2) %></strong> across <%= refunds.refundCount %> transactions</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <!-- Revenue Trend Chart -->
+                    <div class="row">
+                        <div class="col s12">
+                            <div class="card">
+                                <div class="card-content">
+                                    <h6>Revenue Trend</h6>
+                                    <div class="chart-container">
+                                        <canvas id="revenueTrendChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+
+                    <!-- Top Products Table -->
+                    <div class="row">
+                        <div class="col s12 l6">
+                          <div class="section section-data-tables">
+    <div class="row">
+        <div class="col s12">
+            <div class="card">
+                <div class="card-content">
+                    <span class="card-title">Top 10 Products by Revenue</span>
+                    <div class="row">
+                        <div class="col s12 overflow">
+                            <table id="topProductsTable" class="display">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Bookings</th>
+                                        <th>Revenue</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% topProducts.forEach(product => { %>
+                                    <tr>
+                                        <td><%= product.productDetails.title %></td>
+                                        <td><%= product.bookings %></td>
+                                        <td>$<%= product.totalRevenue.toFixed(2) %></td>
+                                        <td>$<%= product.totalCommission.toFixed(2) %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+                        </div>
+
+                        <!-- Top Owners Table -->
+                        <div class="col s12 l6">
+                          <div class="section section-data-tables">
+    <div class="row">
+        <div class="col s12">
+            <div class="card">
+                <div class="card-content">
+                    <span class="card-title">Top 10 Owners by Earnings</span>
+                    <div class="row">
+                        <div class="col s12 overflow">
+                               <% if (advertisements && advertisements.length > 0) { %>
+                            <table id="topOwnersTable" class="display">
+                                <thead>
+                                    <tr>
+                                        <th>Owner</th>
+                                        <th>Bookings</th>
+                                        <th>Earnings</th>
+                                        <th>Commission Paid</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% topOwners.forEach(owner => { %>
+                                    <tr>
+                                        <td><%= owner.ownerDetails.name %></td>
+                                        <td><%= owner.bookings %></td>
+                                        <td>$<%= owner.totalEarnings.toFixed(2) %></td>
+                                        <td>$<%= owner.totalCommission.toFixed(2) %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+                        </div>
+                        
+                    </div>
+
+                    <!-- Advertisement Detailed Table -->
+                    <div class="row mt-5">
+                        <div class="col s12">
+                           <div class="section section-data-tables">
+    <div class="row">
+        <div class="col s12">
+            <div class="card">
+                <div class="card-content">
+                    <span class="card-title">Advertisements Details</span>
+                    <div class="row">
+                        <div class="col s12 overflow">
+                            <table id="adsTable" class="display">
+                                <thead>
+                                    <tr>
+                                        <th>Seller Name</th>
+                                        <th>Product</th>
+                                        <th>Amount Paid</th>
+                                        <th>Start → End Date</th>
+                                        <th>Paid At</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% advertisements.forEach(ad => { %>
+                                    <tr>
+                                        <td><%= ad.seller?.name || 'Unknown' %></td>
+                                        <td><%= ad.product?.title || 'N/A' %></td>
+                                        <td>
+                                            <% if (ad.paymentStatus === 'paid') { %>
+                                                $<%= ad.totalAmount.toFixed(2) %>
+                                            <% } else { %> - <% } %>
+                                        </td>
+                                        <td>
+                                            <%= ad.startDate ? new Date(ad.startDate).toLocaleDateString() : '-' %>
+                                            →
+                                            <%= ad.endDate ? new Date(ad.endDate).toLocaleDateString() : '-' %>
+                                        </td>
+                                        <td>
+                                            <%= ad.paidAt ? new Date(ad.paidAt).toLocaleString() : '-' %>
+                                        </td>
+                                        <td>
+                                            <span class="badge <%= ad.status === 'active' ? 'green' : ad.status === 'in-progress' ? 'blue' : ad.status === 'completed' ? 'grey' : 'orange' %>">
+                                                <%= ad.status.charAt(0).toUpperCase() + ad.status.slice(1) %>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+  <!-- Summary Footer -->
+                                    <div class="card-content grey lighten-4 mt-3">
+                                        <div class="row">
+                                            <div class="col s12 m4">
+                                                <strong>Total Revenue (this period):</strong> $<%= totalAdRevenueFiltered ? totalAdRevenueFiltered.toFixed(2) : '0.00' %>
+                                            </div>
+                                            <div class="col s12 m4">
+                                                <strong>Approved:</strong> <%= totalApprovedFiltered || 0 %>
+                                            </div>
+                                            <div class="col s12 m4">
+                                                <strong>Rejected:</strong> <%= totalRejectedFiltered || 0 %>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                <% } else { %>
+                                    <p class="center-align grey-text">No advertisements found in the selected period.</p>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%- include('_layouts/commonJs') %>
+
+    <script>
+        // Revenue Trend Chart
+        const revenueTrendData = <%- JSON.stringify(revenueTrend) %>;
+          const adTrendRaw       = <%- JSON.stringify(adTrend || []) %>;
+
+             // Build a lookup map for ad revenue keyed by "YYYY-M"
+        const adTrendMap = {};
+        adTrendRaw.forEach(d => {
+            adTrendMap[`${d._id.year}-${d._id.month}`] = d.adRevenue;
+        });
+
+        // Convert month numbers to month names
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const trendLabels = revenueTrendData.map(d => `${monthNames[d._id.month - 1]} ${d._id.year}`);
+        const revenueData = revenueTrendData.map(d => d.revenue);
+        const commissionData = revenueTrendData.map(d => d.commission);
+           // Match each revenue month to its ad revenue (0 if no ads that month)
+        const adTrendData    = revenueTrendData.map(d => adTrendMap[`${d._id.year}-${d._id.month}`] || 0);
+
+        new Chart(document.getElementById('revenueTrendChart'), {
+            type: 'line',
+            data: {
+                labels: trendLabels,
+                datasets: [    {
+                        label: 'Total Revenue',
+                        data: revenueData,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Admin Commission',
+                        data: commissionData,
+                        borderColor: '#f5576c',
+                        backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Advertisement Revenue',
+                        data: adTrendData,
+                        borderColor: '#9b59b6',
+                        backgroundColor: 'rgba(155, 89, 182, 0.15)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+            },
+           options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+
+   <script src="/app-assets/vendors/data-tables/js/jquery.dataTables.min.js"></script>
+<script src="/app-assets/js/scripts/data-tables.js"></script>
+
+<script>
+$(document).ready(function () {
+
+    $('#topProductsTable').DataTable({
+        "pageLength": 10
+    });
+
+    $('#topOwnersTable').DataTable({
+        "pageLength": 10
+    });
+
+    $('#adsTable').DataTable({
+        "pageLength": 10
+    });
+
+});
+</script>
+
+</body>
+</html>
