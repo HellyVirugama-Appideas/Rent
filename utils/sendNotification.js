@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 
 // Initialize the Firebase Admin SDK
-const serviceAccount = require('./rent-anything-a6f78-firebase-adminsdk-fbsvc-df6af7bf0a.json');
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 
 const sendNotificationsToTokens = async (title, body, registrationTokens, data ={}) => {
