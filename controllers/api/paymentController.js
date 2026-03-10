@@ -616,7 +616,7 @@ exports.confirmPayment = async (req, res, next) => {
             return next(createError.BadRequest('Payment not completed.'));
         }
 
-        // ✅ FIX: populate booking with startDate & endDate for notifications
+        // ✅ CHANGE 1: startDate & endDate bhi populate karo
         const payment = await Payment.findOne({
             stripePaymentIntentId: paymentIntentId,
         })
@@ -666,7 +666,7 @@ exports.confirmPayment = async (req, res, next) => {
         booking.paymentStatus = 'paid';
         await booking.save();
 
-        // ✅ Format date as dd/mm/yy
+        // ✅ CHANGE 2: dd/mm/yy format helper
         const formatDate = (date) => {
             if (!date) return 'N/A';
             const d = new Date(date);
@@ -675,13 +675,13 @@ exports.confirmPayment = async (req, res, next) => {
             const year = String(d.getFullYear()).slice(-2);
             return `${day}/${month}/${year}`;
         };
-
         const startDate = formatDate(booking.startDate);
         const endDate = formatDate(booking.endDate);
 
         if (req.user.fcmToken) {
             await sendNotificationsToTokens(
                 `Booking request for ${payment.product.title}`,
+                // ✅ CHANGE 3: dates add kiye notification body mein
                 `Your booking request for ${payment.product.title} (${startDate} - ${endDate}) has been sent.`,
                 [req.user.fcmToken]
             );
@@ -715,6 +715,7 @@ exports.confirmPayment = async (req, res, next) => {
         next(error);
     }
 };
+
 // Process payout to owner after return photos are verified
 exports.processOwnerPayout = async (req, res, next) => {
     try {
