@@ -29,56 +29,178 @@ const getAdvertisementPricing = async () => {
 };
 
 // Create advertisement payment intent
+// exports.createAdvertisementPayment = async (req, res, next) => {
+//     try {
+//         const { productId, numberOfDays, startDate, title, description } =
+//             req.body;
+//         const sellerId = req.user.id;
+
+//         // Validate inputs
+//         if (!productId || !numberOfDays || !startDate) {
+//             return next(
+//                 createError.BadRequest(
+//                     'Product ID, number of days, and start date are required.'
+//                 )
+//             );
+//         }
+
+//         // Verify product exists and belongs to seller
+//         const product = await Product.findOne({
+//             _id: productId,
+//             user: sellerId,
+//             isDeleted: false,
+//         });
+
+//         if (!product) {
+//             return next(
+//                 createError.NotFound(
+//                     'Product not found or you do not have permission.'
+//                 )
+//             );
+//         }
+
+//         // Get pricing
+//         const pricing = await getAdvertisementPricing();
+//         const days = parseInt(numberOfDays);
+
+//         if (days < pricing.minDays || days > pricing.maxDays) {
+//             return next(
+//                 createError.BadRequest(
+//                     `Number of days must be between ${pricing.minDays} and ${pricing.maxDays}.`
+//                 )
+//             );
+//         }
+
+//         // Calculate dates and amount
+//         const start = new Date(startDate);
+//         const end = new Date(start);
+//         end.setDate(end.getDate() + days);
+
+//         const totalAmount = pricing.pricePerDay * days;
+
+//         // Check for overlapping advertisements for same product
+//         const overlapping = await Advertisement.findOne({
+//             product: productId,
+//             status: { $in: ['pending', 'active'] },
+//             paymentStatus: { $in: ['pending', 'paid'] },
+//             $or: [{ startDate: { $lte: end }, endDate: { $gte: start } }],
+//         });
+
+//         if (overlapping) {
+//             return next(
+//                 createError.BadRequest(
+//                     'You already have an advertisement scheduled for this product during the selected dates.'
+//                 )
+//             );
+//         }
+
+//         // Handle image upload
+//         let imageUrl = product.images[0]; // Default to product's first image
+//         if (req.file) {
+//             imageUrl = `/${req.file.filename}`;
+//         }
+
+//         // Create Stripe Payment Intent
+//         const paymentIntent = await stripe.paymentIntents.create({
+//             amount: Math.round(totalAmount * 100),
+//             currency: 'aud',
+//             metadata: {
+//                 sellerId: sellerId,
+//                 productId: productId,
+//                 numberOfDays: days.toString(),
+//                 advertisementType: 'product_promotion',
+//             },
+//             description: `Advertisement for ${product.title} - ${days} days`,
+//             automatic_payment_methods: {
+//                 enabled: true,
+//             },
+//         });
+
+//         // Create advertisement record
+//         const advertisement = await Advertisement.create({
+//             seller: sellerId,
+//             product: productId,
+//             title: title || product.title,
+//             description: description || product.description.substring(0, 200),
+//             image: imageUrl,
+//             numberOfDays: days,
+//             startDate: start,
+//             endDate: end,
+//             pricePerDay: pricing.pricePerDay,
+//             totalAmount,
+//             stripePaymentIntentId: paymentIntent.id,
+//             paymentStatus: 'pending',
+//             status: 'pending',
+//         });
+
+//         res.status(200).json({
+//             success: true,
+//             clientSecret: paymentIntent.client_secret,
+//             paymentIntentId: paymentIntent.id,
+//             advertisementId: advertisement._id,
+//             amount: totalAmount,
+//             pricePerDay: pricing.pricePerDay,
+//             numberOfDays: days,
+//             startDate: start,
+//             endDate: end,
+//             message: `Advertisement payment: AUD $${totalAmount.toFixed(
+//                 2
+//             )} for ${days} days.`,
+//         });
+//     } catch (error) {
+//         console.error('Error creating advertisement payment:', error);
+//         next(error);
+//     }
+// };
+
 exports.createAdvertisementPayment = async (req, res, next) => {
     try {
-        const { productId, numberOfDays, startDate, title, description } =
-            req.body;
+        const { productId, numberOfDays, startDate, endDate, title, description } = req.body;
         const sellerId = req.user.id;
 
-        // Validate inputs
-        if (!productId || !numberOfDays || !startDate) {
-            return next(
-                createError.BadRequest(
-                    'Product ID, number of days, and start date are required.'
-                )
-            );
+        if (!productId || !startDate) {
+            return next(createError.BadRequest('Product ID and start date are required.'));
         }
 
-        // Verify product exists and belongs to seller
-        const product = await Product.findOne({
-            _id: productId,
-            user: sellerId,
-            isDeleted: false,
-        });
-
-        if (!product) {
-            return next(
-                createError.NotFound(
-                    'Product not found or you do not have permission.'
-                )
-            );
+        if (!numberOfDays && !endDate) {
+            return next(createError.BadRequest('Either numberOfDays or endDate is required.'));
         }
 
-        // Get pricing
+        const product = await Product.findOne({ _id: productId, user: sellerId, isDeleted: false });
+        if (!product) return next(createError.NotFound('Product not found or you do not have permission.'));
+
         const pricing = await getAdvertisementPricing();
-        const days = parseInt(numberOfDays);
+
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+
+        let end;
+        let days;
+
+        // ✅ FIX: endDate aaya to use karo, warna numberOfDays se calculate karo
+        if (endDate) {
+            end = new Date(endDate);
+            end.setHours(0, 0, 0, 0);
+            // days calculate karo endDate - startDate se
+            const diffMs = end - start;
+            days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        } else {
+            days = parseInt(numberOfDays);
+            end = new Date(start);
+            end.setDate(end.getDate() + days);
+            end.setHours(0, 0, 0, 0);
+        }
 
         if (days < pricing.minDays || days > pricing.maxDays) {
-            return next(
-                createError.BadRequest(
-                    `Number of days must be between ${pricing.minDays} and ${pricing.maxDays}.`
-                )
-            );
+            return next(createError.BadRequest(`Number of days must be between ${pricing.minDays} and ${pricing.maxDays}.`));
         }
 
-        // Calculate dates and amount
-        const start = new Date(startDate);
-        const end = new Date(start);
-        end.setDate(end.getDate() + days);
+        if (end <= start) {
+            return next(createError.BadRequest('End date must be after start date.'));
+        }
 
         const totalAmount = pricing.pricePerDay * days;
 
-        // Check for overlapping advertisements for same product
         const overlapping = await Advertisement.findOne({
             product: productId,
             status: { $in: ['pending', 'active'] },
@@ -87,36 +209,25 @@ exports.createAdvertisementPayment = async (req, res, next) => {
         });
 
         if (overlapping) {
-            return next(
-                createError.BadRequest(
-                    'You already have an advertisement scheduled for this product during the selected dates.'
-                )
-            );
+            return next(createError.BadRequest('You already have an advertisement scheduled for this product during the selected dates.'));
         }
 
-        // Handle image upload
-        let imageUrl = product.images[0]; // Default to product's first image
-        if (req.file) {
-            imageUrl = `/${req.file.filename}`;
-        }
+        let imageUrl = product.images[0];
+        if (req.file) imageUrl = `/${req.file.filename}`;
 
-        // Create Stripe Payment Intent
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(totalAmount * 100),
             currency: 'aud',
             metadata: {
-                sellerId: sellerId,
-                productId: productId,
+                sellerId,
+                productId,
                 numberOfDays: days.toString(),
                 advertisementType: 'product_promotion',
             },
             description: `Advertisement for ${product.title} - ${days} days`,
-            automatic_payment_methods: {
-                enabled: true,
-            },
+            automatic_payment_methods: { enabled: true },
         });
 
-        // Create advertisement record
         const advertisement = await Advertisement.create({
             seller: sellerId,
             product: productId,
@@ -143,9 +254,7 @@ exports.createAdvertisementPayment = async (req, res, next) => {
             numberOfDays: days,
             startDate: start,
             endDate: end,
-            message: `Advertisement payment: AUD $${totalAmount.toFixed(
-                2
-            )} for ${days} days.`,
+            message: `Advertisement payment: AUD $${totalAmount.toFixed(2)} for ${days} days.`,
         });
     } catch (error) {
         console.error('Error creating advertisement payment:', error);
