@@ -171,27 +171,29 @@ exports.createAdvertisementPayment = async (req, res, next) => {
 
         const pricing = await getAdvertisementPricing();
 
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
+        // ✅ FIX: Parse date as UTC directly to avoid timezone shift
+        // "2026-03-12" → split karo → UTC date banao — no timezone conversion
+        const parseUTCDate = (dateStr) => {
+            const [year, month, day] = String(dateStr).split('T')[0].split('-').map(Number);
+            return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        };
+
+        const start = parseUTCDate(startDate);
 
         let end;
         let days;
 
-        // ✅ FIX: endDate aaya to use karo, warna numberOfDays se calculate karo
         if (endDate) {
-            end = new Date(endDate);
-            end.setHours(0, 0, 0, 0);
-            // days calculate karo endDate - startDate se
+            end = parseUTCDate(endDate);
             const diffMs = end - start;
             days = Math.round(diffMs / (1000 * 60 * 60 * 24));
         } else {
             days = parseInt(numberOfDays);
             end = new Date(start);
-            end.setDate(end.getDate() + days);
-            end.setHours(0, 0, 0, 0);
+            end.setUTCDate(end.getUTCDate() + days - 1); // ✅ inclusive end date
         }
 
-        if (days < pricing.minDays || days > pricing.maxDays) {
+        if (isNaN(days) || days < pricing.minDays || days > pricing.maxDays) {
             return next(createError.BadRequest(`Number of days must be between ${pricing.minDays} and ${pricing.maxDays}.`));
         }
 
