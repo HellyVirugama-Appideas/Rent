@@ -16,15 +16,7 @@ const {
     createChargeBreakdown,
 } = require('../../utils/stripeFeesCalculator');
 
-// ✅ GLOBAL date formatter — dd/mm/yyyy — use this everywhere
-const formatDate = (date) => {
-    if (!date) return 'N/A';
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
-};
+
 
 // Calculate cancellation charges based on time before booking
 const calculateCancellationCharges = (booking, product) => {
@@ -617,31 +609,41 @@ exports.confirmPayment = async (req, res, next) => {
     try {
         const { paymentIntentId } = req.body;
 
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+            paymentIntentId
+        );
 
         if (paymentIntent.status !== 'succeeded') {
             return next(createError.BadRequest('Payment not completed.'));
         }
 
-        // ✅ FIX: populate booking with startDate & endDate
         const payment = await Payment.findOne({
             stripePaymentIntentId: paymentIntentId,
         })
-            .populate({ path: 'booking', select: 'paymentStatus startDate endDate' })
+            .populate('booking')
             .populate('owner', 'name fcmToken')
             .populate('renter', 'name')
             .populate('product', 'title');
 
-        if (!payment) return next(createError.NotFound('Payment record not found.'));
+        if (!payment) {
+            return next(createError.NotFound('Payment record not found.'));
+        }
 
         const paymentFees = await getStripePaymentFees(paymentIntentId);
+        // console.log('-----------------------------------');
 
+        // console.log('paymentFees: ', paymentFees);
+        // console.log('-----------------------------------');
+        // Update payment status
         payment.paymentStatus = 'paid';
         payment.paidAt = new Date();
         payment.stripeChargeId = paymentIntent.latest_charge;
 
+        // Store actual stripe charges
         if (!payment.stripeCharges) {
-            payment.stripeCharges = { chargesBreakdown: [] };
+            payment.stripeCharges = {
+                chargesBreakdown: [],
+            };
         }
 
         payment.stripeCharges.paymentProcessingFee = paymentFees.percentageFee;
@@ -649,6 +651,7 @@ exports.confirmPayment = async (req, res, next) => {
         payment.stripeCharges.paymentTotalFee = paymentFees.totalFee;
         payment.stripeCharges.totalStripeCharges = paymentFees.totalFee;
 
+        // Add to breakdown with actual Stripe data
         payment.stripeCharges.chargesBreakdown.push(
             createChargeBreakdown(
                 'payment',
@@ -661,38 +664,44 @@ exports.confirmPayment = async (req, res, next) => {
         );
 
         await payment.save();
+        // console.log('payment: ', payment);
 
+        // Update booking payment status
         const booking = payment.booking;
         booking.paymentStatus = 'paid';
         await booking.save();
 
-        // ✅ dd/mm/yyyy format
-        const startDate = formatDate(booking.startDate);
-        const endDate = formatDate(booking.endDate);
-
         if (req.user.fcmToken) {
             await sendNotificationsToTokens(
                 `Booking request for ${payment.product.title}`,
-                `Your booking request for ${payment.product.title} (${startDate} - ${endDate}) has been sent.`,
+                `Your booking request for ${payment.product.title} has been sent.`,
                 [req.user.fcmToken]
             );
             await userNotificationModel.create({
                 sentTo: [req.user.id],
                 title: `Booking request for ${payment.product.title}`,
-                body: `Your booking request for ${payment.product.title} (${startDate} - ${endDate}) has been sent.`,
+                body: `Your booking request for ${payment.product.title} has been sent.`,
             });
         }
 
         if (payment.owner && payment.owner.fcmToken) {
             await sendNotificationsToTokens(
                 'Payment Received',
-                `${payment.renter.name} has paid AUD $${payment.totalAmount.toFixed(2)} for ${payment.product.title} (${startDate} - ${endDate}). Amount will be transferred after rental completion.`,
+                `${
+                    payment.renter.name
+                } has paid AUD $${payment.totalAmount.toFixed(2)} for ${
+                    payment.product.title
+                }. Amount will be transferred after rental completion.`,
                 [payment.owner.fcmToken]
             );
             await userNotificationModel.create({
                 sentTo: [payment.owner._id],
                 title: 'Payment Received',
-                body: `${payment.renter.name} has paid AUD $${payment.totalAmount.toFixed(2)} for ${payment.product.title} (${startDate} - ${endDate}). Amount will be transferred after rental completion.`,
+                body: `${
+                    payment.renter.name
+                } has paid AUD $${payment.totalAmount.toFixed(2)} for ${
+                    payment.product.title
+                }. Amount will be transferred after rental completion.`,
             });
         }
 
@@ -706,7 +715,6 @@ exports.confirmPayment = async (req, res, next) => {
         next(error);
     }
 };
-
 
 // Process payout to owner after return photos are verified
 exports.processOwnerPayout = async (req, res, next) => {
