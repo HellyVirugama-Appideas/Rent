@@ -7,6 +7,16 @@ const createError = require('http-errors');
 const { sendNotificationsToTokens } = require('../../utils/sendNotification');
 const userNotificationModel = require('../../models/userNotificationModel');
 
+// ✅ dd/mm/yyyy formatter
+const formatDate = (date) => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 // Get advertisement pricing from admin settings
 const getAdvertisementPricing = async () => {
     const settings = await AdminCommission.findOne({ isActive: true });
@@ -260,6 +270,7 @@ exports.confirmAdvertisementPayment = async (req, res, next) => {
             //     `Your advertisement for ${advertisement.product.title} has been submitted. It will go live on ${advertisement.startDate.toLocaleDateString()}.`,
             //     [advertisement.seller.fcmToken]
             // );]
+             const goLiveDate = formatDate(advertisement.startDate);
             await sendNotificationsToTokens(
                 'Advertisement Payment Successful',
                 `Your advertisement for ${advertisement.product.title} has been submitted. It will go live on ${goLiveDate}.`,
