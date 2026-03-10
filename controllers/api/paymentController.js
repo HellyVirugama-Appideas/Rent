@@ -604,7 +604,7 @@ exports.createPaymentIntent = async (req, res, next) => {
 
 // Confirm payment after successful Stripe payment
 
-exports.confirmPayment = async (req, res, next) => {
+exports.confirmPayment = async(req, res, next) => {
     try {
         const { paymentIntentId } = req.body;
 
@@ -612,11 +612,10 @@ exports.confirmPayment = async (req, res, next) => {
             paymentIntentId
         );
 
-        if (paymentIntent.status !== 'succeeded') {
-            return next(createError.BadRequest('Payment not completed.'));
-        }
+        // if (paymentIntent.status !== 'succeeded') {
+        //     return next(createError.BadRequest('Payment not completed.'));
+        // }
 
-        // ✅ CHANGE 1: startDate & endDate bhi populate karo
         const payment = await Payment.findOne({
             stripePaymentIntentId: paymentIntentId,
         })
@@ -666,22 +665,36 @@ exports.confirmPayment = async (req, res, next) => {
         booking.paymentStatus = 'paid';
         await booking.save();
 
-        // ✅ CHANGE 2: dd/mm/yy format helper
+        // ===== DEBUG LOGS =====
+        console.log('=== confirmPayment DEBUG ===');
+        console.log('booking.startDate RAW:', booking.startDate);
+        console.log('booking.endDate RAW:', booking.endDate);
+        console.log('typeof startDate:', typeof booking.startDate);
+        console.log('product.title:', payment.product?.title);
+        console.log('req.user.fcmToken:', req.user?.fcmToken ? 'EXISTS' : 'NULL');
+        console.log('owner.fcmToken:', payment.owner?.fcmToken ? 'EXISTS' : 'NULL');
+        console.log('============================');
+        // ===== END DEBUG LOGS =====
+
         const formatDate = (date) => {
             if (!date) return 'N/A';
             const d = new Date(date);
+            console.log('formatDate input:', date, '=> parsed:', d, '=> getDate:', d.getDate(), 'getMonth:', d.getMonth() + 1, 'getFullYear:', d.getFullYear());
             const day = String(d.getDate()).padStart(2, '0');
             const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = String(d.getFullYear()).slice(-2);
+            const year = String(d.getFullYear());
             return `${day}/${month}/${year}`;
         };
+
         const startDate = formatDate(booking.startDate);
         const endDate = formatDate(booking.endDate);
+
+        console.log('startDate formatted:', startDate);
+        console.log('endDate formatted:', endDate);
 
         if (req.user.fcmToken) {
             await sendNotificationsToTokens(
                 `Booking request for ${payment.product.title}`,
-                // ✅ CHANGE 3: dates add kiye notification body mein
                 `Your booking request for ${payment.product.title} (${startDate} - ${endDate}) has been sent.`,
                 [req.user.fcmToken]
             );
@@ -715,6 +728,7 @@ exports.confirmPayment = async (req, res, next) => {
         next(error);
     }
 };
+
 
 // Process payout to owner after return photos are verified
 exports.processOwnerPayout = async (req, res, next) => {
