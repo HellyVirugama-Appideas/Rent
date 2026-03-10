@@ -255,9 +255,14 @@ exports.confirmAdvertisementPayment = async (req, res, next) => {
 
         // Send notification to seller
         if (advertisement.seller.fcmToken) {
+            // await sendNotificationsToTokens(
+            //     'Advertisement Payment Successful',
+            //     `Your advertisement for ${advertisement.product.title} has been submitted. It will go live on ${advertisement.startDate.toLocaleDateString()}.`,
+            //     [advertisement.seller.fcmToken]
+            // );]
             await sendNotificationsToTokens(
                 'Advertisement Payment Successful',
-                `Your advertisement for ${advertisement.product.title} has been submitted. It will go live on ${advertisement.startDate.toLocaleDateString()}.`,
+                `Your advertisement for ${advertisement.product.title} has been submitted. It will go live on ${goLiveDate}.`,
                 [advertisement.seller.fcmToken]
             );
             await userNotificationModel.create({
