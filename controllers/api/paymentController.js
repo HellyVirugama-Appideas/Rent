@@ -603,33 +603,26 @@ exports.createPaymentIntent = async (req, res, next) => {
 // };
 
 // Confirm payment after successful Stripe payment
-
-exports.confirmPayment = async(req, res, next) => {
+exports.confirmPayment = async (req, res, next) => {
     try {
         const { paymentIntentId } = req.body;
 
-        const paymentIntent = await stripe.paymentIntents.retrieve(
-            paymentIntentId
-        );
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-        // if (paymentIntent.status !== 'succeeded') {
-        //     return next(createError.BadRequest('Payment not completed.'));
-        // }
+        if (paymentIntent.status !== 'succeeded') {
+            return next(createError.BadRequest('Payment not completed.'));
+        }
 
+        // ✅ FIX: populate booking with startDate & endDate
         const payment = await Payment.findOne({
             stripePaymentIntentId: paymentIntentId,
         })
-            .populate({
-                path: 'booking',
-                select: 'paymentStatus startDate endDate',
-            })
+            .populate({ path: 'booking', select: 'paymentStatus startDate endDate' })
             .populate('owner', 'name fcmToken')
             .populate('renter', 'name')
             .populate('product', 'title');
 
-        if (!payment) {
-            return next(createError.NotFound('Payment record not found.'));
-        }
+        if (!payment) return next(createError.NotFound('Payment record not found.'));
 
         const paymentFees = await getStripePaymentFees(paymentIntentId);
 
@@ -638,9 +631,7 @@ exports.confirmPayment = async(req, res, next) => {
         payment.stripeChargeId = paymentIntent.latest_charge;
 
         if (!payment.stripeCharges) {
-            payment.stripeCharges = {
-                chargesBreakdown: [],
-            };
+            payment.stripeCharges = { chargesBreakdown: [] };
         }
 
         payment.stripeCharges.paymentProcessingFee = paymentFees.percentageFee;
@@ -665,32 +656,9 @@ exports.confirmPayment = async(req, res, next) => {
         booking.paymentStatus = 'paid';
         await booking.save();
 
-        // ===== DEBUG LOGS =====
-        console.log('=== confirmPayment DEBUG ===');
-        console.log('booking.startDate RAW:', booking.startDate);
-        console.log('booking.endDate RAW:', booking.endDate);
-        console.log('typeof startDate:', typeof booking.startDate);
-        console.log('product.title:', payment.product?.title);
-        console.log('req.user.fcmToken:', req.user?.fcmToken ? 'EXISTS' : 'NULL');
-        console.log('owner.fcmToken:', payment.owner?.fcmToken ? 'EXISTS' : 'NULL');
-        console.log('============================');
-        // ===== END DEBUG LOGS =====
-
-        const formatDate = (date) => {
-            if (!date) return 'N/A';
-            const d = new Date(date);
-            console.log('formatDate input:', date, '=> parsed:', d, '=> getDate:', d.getDate(), 'getMonth:', d.getMonth() + 1, 'getFullYear:', d.getFullYear());
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = String(d.getFullYear());
-            return `${day}/${month}/${year}`;
-        };
-
+        // ✅ dd/mm/yyyy format
         const startDate = formatDate(booking.startDate);
         const endDate = formatDate(booking.endDate);
-
-        console.log('startDate formatted:', startDate);
-        console.log('endDate formatted:', endDate);
 
         if (req.user.fcmToken) {
             await sendNotificationsToTokens(
